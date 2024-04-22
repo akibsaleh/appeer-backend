@@ -3,14 +3,43 @@ import { User } from './schema/user.schema';
 import { Model } from 'mongoose';
 import * as bcrypt from 'bcryptjs';
 import { InjectModel } from '@nestjs/mongoose';
+import { OAuth2Client } from 'google-auth-library';
+import { googleConstant } from 'src/auth/constants';
 
 @Injectable()
 export class UserService {
   constructor(@InjectModel(User.name) private userModel: Model<User>) {}
 
-  async create(email: string, password: string, role: string): Promise<User> {
+  async create(
+    name: string,
+    photo: string,
+    email: string,
+    password: string,
+    role: string,
+  ): Promise<User> {
     const hashedPassword = await bcrypt.hash(password, 10);
-    const createUser = new this.userModel({ email, password: hashedPassword, role });
+    const createUser = new this.userModel({
+      name,
+      photo,
+      email,
+      password: hashedPassword,
+      role,
+    });
+    return createUser.save();
+  }
+
+  async oAuthCreate(
+    name: string,
+    photo: string,
+    email: string,
+    role: string,
+  ): Promise<User> {
+    const createUser = new this.userModel({
+      name,
+      photo,
+      email,
+      role,
+    });
     return createUser.save();
   }
 
@@ -20,8 +49,8 @@ export class UserService {
 
   async updateRefreshToken(
     userId: string,
-    refreshToken: string,
-    refreshTokenExpiresAt: Date,
+    refreshToken?: string,
+    refreshTokenExpiresAt?: Date,
   ) {
     return this.userModel
       .findByIdAndUpdate(
@@ -32,8 +61,29 @@ export class UserService {
       .exec();
   }
 
-  async updatePassword( userId: string, password: string){
+  async updatePassword(userId: string, password: string) {
     const hashedPassword = await bcrypt.hash(password, 10);
-    return this.userModel.findByIdAndUpdate(userId, {password: hashedPassword}).exec();
+    return this.userModel
+      .findByIdAndUpdate(userId, { password: hashedPassword })
+      .exec();
+  }
+
+  async verifyGoogleIdToken(id_token: string) {
+    const client = new OAuth2Client();
+    async function verify() {
+      const ticket = await client.verifyIdToken({
+        idToken: id_token,
+        audience: googleConstant.clientId,
+      });
+      const payload = ticket.getPayload();
+      return payload['sub'];
+    }
+
+    try {
+      const res = await verify();
+      return res;
+    } catch (error) {
+      console.log(error);
+    }
   }
 }

@@ -6,6 +6,7 @@ import { Request } from 'express';
 import { RegisterDto } from '../user/dto/registerUser.dto';
 import { MongooseError } from 'mongoose';
 import { UpdatePasswordDto } from 'src/user/dto/updatePassword.dto';
+import { OAuthAccessDto } from 'src/user/dto/oAuthAccess.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -46,5 +47,10 @@ export class AuthController {
   @Post('update-password')
   async updatePassword(@Body() updatePasswordDto: UpdatePasswordDto) {
     return this.authService.updatePassword(updatePasswordDto);
+  }
+
+  @Post('oauthentication')
+  async verifyOauth(@Body() oAuthAccessDto: OAuthAccessDto) {
+    return this.authService.oAuthAccess(oAuthAccessDto);
   }
 }

@@ -13,6 +13,7 @@ import { LoginUserDto } from 'src/user/dto/loginUser.dto';
 import { RegisterDto } from '../user/dto/registerUser.dto';
 import { ResetTokenService } from 'src/reset-token/reset-token.service';
 import { UpdatePasswordDto } from 'src/user/dto/updatePassword.dto';
+import { OAuthAccessDto } from 'src/user/dto/oAuthAccess.dto';
 
 interface LoginResponse {
   id: string;
@@ -21,6 +22,7 @@ interface LoginResponse {
   role: string;
   accessToken: string;
   refreshToken: string;
+  refreshTokenExpiresAt: Date;
 }
 
 @Injectable()
@@ -28,7 +30,7 @@ export class AuthService {
   constructor(
     private userService: UserService,
     private jwtService: JwtService,
-    private resetTokenService: ResetTokenService
+    private resetTokenService: ResetTokenService,
   ) {}
 
   async validateUser(email: string, pass: string): Promise<any> {
@@ -64,7 +66,7 @@ export class AuthService {
 
     const accessToken = this.jwtService.sign(accessTokenPayload, {
       secret: jwtConstant.secret,
-      expiresIn: '15m',
+      expiresIn: '24h',
     });
 
     const refreshToken = this.jwtService.sign(refreshTokenPayload, {
@@ -89,32 +91,49 @@ export class AuthService {
       role: user.role,
       accessToken,
       refreshToken,
+      refreshTokenExpiresAt,
     };
   }
 
   async refreshToken(
     refreshToken: string,
-  ): Promise<{ accessToken: string; refreshToken: string }> {
+  ): Promise<{
+    accessToken: string;
+    refreshToken: string;
+    refreshTokenExpiresAt: Date;
+  }> {
     const payload = await this.jwtService.verifyAsync(refreshToken, {
       secret: jwtConstant.refreshSecret,
     });
 
     const user = await this.userService.findOne(payload.email);
 
-    if (
-      !user ||
-      user.refreshToken !== refreshToken ||
-      user.refreshTokenExpiresAt < new Date()
-    ) {
+    let newAccessToken = '';
+    let newRefreshToken = '';
+
+    if (!user || user.refreshToken !== refreshToken) {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
-    const newAccessToken = this.jwtService.sign(
+    if (user.refreshTokenExpiresAt > new Date()) {
+      newAccessToken = this.jwtService.sign(
+        { sub: user.id, email: user.email, role: user.role, type: 'access' },
+        { expiresIn: '15m' },
+      );
+
+      return {
+        accessToken: newAccessToken,
+        refreshToken: refreshToken,
+        refreshTokenExpiresAt: user.refreshTokenExpiresAt,
+      };
+    }
+
+    newAccessToken = this.jwtService.sign(
       { sub: user.id, email: user.email, role: user.role, type: 'access' },
       { expiresIn: '15m' },
     );
 
-    const newRefreshToken = this.jwtService.sign(
+    newRefreshToken = this.jwtService.sign(
       { sub: user.id, email: user.email, role: user.role, type: 'refresh' },
       { expiresIn: '7d' },
     );
@@ -125,11 +144,15 @@ export class AuthService {
       new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     );
 
-    return { accessToken: newAccessToken, refreshToken: newRefreshToken };
+    return {
+      accessToken: newAccessToken,
+      refreshToken: newRefreshToken,
+      refreshTokenExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    };
   }
 
   async register(registerDto: RegisterDto) {
-    const { email, password, role } = registerDto;
+    const { name, photo, email, password, role } = registerDto;
 
     const duplicate = await this.userService.findOne(email);
     if (duplicate)
@@ -137,7 +160,50 @@ export class AuthService {
         error: new HttpException('Duplicate email', HttpStatus.BAD_REQUEST),
       };
 
-    return this.userService.create(email, password, role);
+    return this.userService.create(name, photo, email, password, role);
+  }
+
+  async oAuthAccess(oAuthAccessDto: OAuthAccessDto) {
+    const { name, photo, email, id_token, role } = oAuthAccessDto;
+    let user = await this.userService.findOne(email);
+    if (!user) {
+      const googleIdToken =
+        await this.userService.verifyGoogleIdToken(id_token);
+      if (googleIdToken)
+        user = await this.userService.oAuthCreate(name, photo, email, role);
+    }
+
+    const payload = { email: user.email, sub: user.id, role: user.role };
+
+    const accessTokenPayload = { ...payload, type: 'access' };
+
+    const refreshTokenPayload = { ...payload, type: 'refresh' };
+
+    const accessToken = this.jwtService.sign(accessTokenPayload, {
+      secret: jwtConstant.secret,
+      expiresIn: '24h',
+    });
+
+    const refreshToken = this.jwtService.sign(refreshTokenPayload, {
+      secret: jwtConstant.refreshSecret,
+      expiresIn: '7d',
+    });
+
+    const dbUser = await this.userService.updateRefreshToken(
+      user.id,
+      refreshToken,
+      new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    );
+
+    return {
+      name: dbUser.name,
+      photo: dbUser.photo,
+      email: dbUser.email,
+      role: dbUser.role,
+      accessToken,
+      refreshToken,
+      refreshTokenExpiresAt: dbUser.refreshTokenExpiresAt,
+    };
   }
 
   async passwordReset(email: string) {
@@ -154,14 +220,15 @@ export class AuthService {
       { expiresIn: '1h' },
     );
 
-     return this.resetTokenService.create(email, resetToken);
+    return this.resetTokenService.create(email, resetToken);
   }
 
   async updatePassword(updatePasswordDto: UpdatePasswordDto): Promise<any> {
-    const {email, password, token} = updatePasswordDto;
+    const { email, password, token } = updatePasswordDto;
     const isToken = await this.resetTokenService.findOne(email);
 
-    if(!isToken || isToken.resetToken !== token) throw new UnauthorizedException('Invalid Token');
+    if (!isToken || isToken.resetToken !== token)
+      throw new UnauthorizedException('Invalid Token');
 
     const isExpired = this.jwtService.decode(token);
 
