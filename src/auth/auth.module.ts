@@ -1,3 +1,4 @@
+import appConfig from 'src/config/app.config';
 import { Module } from '@nestjs/common';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
@@ -6,7 +7,6 @@ import { JwtStrategy } from './jwt.strategy';
 import { UserModule } from 'src/user/user.module';
 import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
-import { jwtConstant } from './constants';
 import { ResetTokenModule } from 'src/reset-token/reset-token.module';
 
 @Module({
@@ -14,9 +14,11 @@ import { ResetTokenModule } from 'src/reset-token/reset-token.module';
     UserModule,
     PassportModule,
     ResetTokenModule,
-    JwtModule.register({
-      secret: jwtConstant.secret,
-      signOptions: { expiresIn: '60s' },
+    JwtModule.registerAsync({
+      useFactory: () => ({
+        secret: appConfig().jwtSecret,
+        signOptions: { expiresIn: '24h' },
+      }),
     }),
   ],
   controllers: [AuthController],

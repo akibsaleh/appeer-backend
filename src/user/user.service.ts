@@ -4,7 +4,7 @@ import { Model } from 'mongoose';
 import * as bcrypt from 'bcryptjs';
 import { InjectModel } from '@nestjs/mongoose';
 import { OAuth2Client } from 'google-auth-library';
-import { googleConstant } from 'src/auth/constants';
+import appConfig from 'src/config/app.config';
 
 @Injectable()
 export class UserService {
@@ -73,7 +73,7 @@ export class UserService {
     async function verify() {
       const ticket = await client.verifyIdToken({
         idToken: id_token,
-        audience: googleConstant.clientId,
+        audience: appConfig().googleClientId,
       });
       const payload = ticket.getPayload();
       return payload['sub'];
