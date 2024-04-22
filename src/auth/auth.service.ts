@@ -7,13 +7,13 @@ import {
 import { UserService } from 'src/user/user.service';
 import * as bcrypt from 'bcryptjs';
 import { JwtService } from '@nestjs/jwt';
-import { jwtConstant } from 'config';
 import { Request } from 'express';
 import { LoginUserDto } from 'src/user/dto/loginUser.dto';
 import { RegisterDto } from '../user/dto/registerUser.dto';
 import { ResetTokenService } from 'src/reset-token/reset-token.service';
 import { UpdatePasswordDto } from 'src/user/dto/updatePassword.dto';
 import { OAuthAccessDto } from 'src/user/dto/oAuthAccess.dto';
+import appConfig from 'src/config/app.config';
 
 interface LoginResponse {
   id: string;
@@ -65,12 +65,12 @@ export class AuthService {
     };
 
     const accessToken = this.jwtService.sign(accessTokenPayload, {
-      secret: jwtConstant.secret,
+      secret: appConfig().jwtSecret,
       expiresIn: '24h',
     });
 
     const refreshToken = this.jwtService.sign(refreshTokenPayload, {
-      secret: jwtConstant.refreshSecret,
+      secret: appConfig().jwtResetSecret,
       expiresIn: '7d',
     });
 
@@ -103,7 +103,7 @@ export class AuthService {
     refreshTokenExpiresAt: Date;
   }> {
     const payload = await this.jwtService.verifyAsync(refreshToken, {
-      secret: jwtConstant.refreshSecret,
+      secret: appConfig().jwtRefreshSecret,
     });
 
     const user = await this.userService.findOne(payload.email);
@@ -180,12 +180,12 @@ export class AuthService {
     const refreshTokenPayload = { ...payload, type: 'refresh' };
 
     const accessToken = this.jwtService.sign(accessTokenPayload, {
-      secret: jwtConstant.secret,
+      secret: appConfig().jwtSecret,
       expiresIn: '24h',
     });
 
     const refreshToken = this.jwtService.sign(refreshTokenPayload, {
-      secret: jwtConstant.refreshSecret,
+      secret: appConfig().jwtRefreshSecret,
       expiresIn: '7d',
     });
 
