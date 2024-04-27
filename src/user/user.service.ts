@@ -73,7 +73,7 @@ export class UserService {
     async function verify() {
       const ticket = await client.verifyIdToken({
         idToken: id_token,
-        audience: appConfig().googleClientId,
+        audience: `60772464529-a0grv7h08eo91ed8kiv4s8r1v1p387nu.apps.googleusercontent.com`,
       });
       const payload = ticket.getPayload();
       return payload['sub'];

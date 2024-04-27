@@ -20,6 +20,7 @@ interface LoginResponse {
   email: string;
   password: string;
   role: string;
+  photo: string;
   accessToken: string;
   refreshToken: string;
   refreshTokenExpiresAt: Date;
@@ -89,6 +90,7 @@ export class AuthService {
       email: user.email,
       password: user.password,
       role: user.role,
+      photo: user.photo,
       accessToken,
       refreshToken,
       refreshTokenExpiresAt,
